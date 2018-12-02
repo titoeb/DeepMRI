@@ -40,7 +40,29 @@ Y_train = Y[0:train_index,:,:]
 Y_eval = Y[train_index:X.shape[0],:,:,:]
 
 # Definition of the network
+def conv_layer(tensor_in, name_layer, is_training):
+    x = tf.layers.conv2d(
+        inputs = tensor_in,
+        filters = 64,
+        kernel_size = [3, 3],
+        padding = "same",
+        activation= None,
+        name = name_layer)
+    
+    x = tf.layers.batch_normalization(x, name = name_layer + "_bn",
+                                             center=True, 
+                                             scale=True, 
+                                             training=is_training)
+    
+    return tf.nn.relu(x, name = name_layer + "_relu")
+	
 def cnn_model_fn(features, labels, mode):
+    
+    ## Hyper paramters ##
+    eps_start = 0.05 #learning rate in the beginning
+    eps_end = eps_start / 100 #final learning rate
+    tau = 20000 # number of iterations afterwards is the learning rate constant
+    #####################
     
     # Input Layer
     input_layer = features['x']
@@ -49,131 +71,75 @@ def cnn_model_fn(features, labels, mode):
     conv1 = tf.layers.conv2d(
         inputs = input_layer,
         filters = 64,
-        strides = 2,
-        kernel_size = 5,
+        kernel_size = 3,
         padding = "same",
         activation= tf.nn.relu,
         name = "Conv_1")
+    is_training_mode = (mode == tf.estimator.ModeKeys.TRAIN)
     
-    # Convolutional layer #2
-    conv2 = tf.layers.conv2d(
-        inputs = conv1,
-        filters = 128,
-        strides = [2, 2],
-        kernel_size = [5, 5],
-        padding = "same",
-        activation= tf.nn.relu,
-        name = "Conv_2")
-    
-    conv2_bn = tf.layers.batch_normalization(conv2,
-                                             name = "Conv_2_bn",
-                                             center=True, 
-                                             scale=True, 
-                                             training=(mode == tf.estimator.ModeKeys.TRAIN))
+     # 18 of the middle layers with Convolution, batch normalization and afterwards ReLu
+    conv2 = conv_layer(conv1, "conv2", is_training = is_training_mode)
+    conv3 = conv_layer(conv2, "conv3", is_training = is_training_mode)
+    conv4 = conv_layer(conv3, "conv4", is_training = is_training_mode)
+    conv5 = conv_layer(conv4, "conv5", is_training = is_training_mode)
+    conv6 = conv_layer(conv5, "conv6", is_training = is_training_mode)
+    conv7 = conv_layer(conv6, "conv7", is_training = is_training_mode)
+    conv8 = conv_layer(conv7, "conv8", is_training = is_training_mode)
+    conv9 = conv_layer(conv8, "conv9", is_training = is_training_mode)
+    conv10 = conv_layer(conv9, "conv10", is_training = is_training_mode)
+    conv11 = conv_layer(conv10, "conv11", is_training = is_training_mode)
+    conv12 = conv_layer(conv11, "conv12", is_training = is_training_mode)
+    conv13 = conv_layer(conv12, "conv13", is_training = is_training_mode)
+    conv14 = conv_layer(conv13, "conv14", is_training = is_training_mode)
+    conv15 = conv_layer(conv14, "conv15", is_training = is_training_mode)
+    conv16 = conv_layer(conv15, "conv16", is_training = is_training_mode)
+    conv17 = conv_layer(conv16, "conv17", is_training = is_training_mode)
+    conv18 = conv_layer(conv17, "conv18", is_training = is_training_mode)
+    conv19 = conv_layer(conv18, "conv19", is_training = is_training_mode)
 
-        
-    # Convolutional layer #3
-    conv3 = tf.layers.conv2d(
-        inputs = conv2_bn,
-        filters = 256,
-        strides = [2, 2],
-        kernel_size = [5, 5],
-        padding = "same",
-        activation = tf.nn.relu,
-        name = "Conv_3")
-    
-    conv3_bn = tf.layers.batch_normalization(conv3,
-                                             name = "Conv_3_bn",
-                                             center=True, 
-                                             scale=True, 
-                                             training=(mode == tf.estimator.ModeKeys.TRAIN))
-    
-    
-    # Deconvolutional layer #1
-    deconv1 = tf.layers.conv2d_transpose(
-        inputs = conv3_bn,
-        filters = 256,
-        strides = [2, 2],
-        kernel_size = [5, 5],
-        padding = "same",
-        activation= tf.nn.relu,
-        name = "Deconv_1")
-    
-    deconv1_bn = tf.layers.batch_normalization(deconv1,
-                                             name = "deconv_1_bn",
-                                             center=True, 
-                                             scale=True, 
-                                             training=(mode == tf.estimator.ModeKeys.TRAIN))
-
-    
-    # Deconvolutional layer #2
-    deconv2 = tf.layers.conv2d_transpose(
-        inputs = deconv1_bn,
-        filters = 128,
-        strides = [2, 2],
-        kernel_size = [5, 5],
-        activation= tf.nn.relu,
-        padding = "same",
-        name = "Deconv_2")
-    
-    deconv2_bn = tf.layers.batch_normalization(deconv2,
-                                             name = "deconv_2_bn",
-                                             center=True, 
-                                             scale=True, 
-                                            training=(mode == tf.estimator.ModeKeys.TRAIN))
-
-    
-    # Deconvolutional layer #3
-    deconv3 = tf.layers.conv2d_transpose(
-        inputs = deconv2_bn,
-        filters = 64,
-        strides = [2, 2],
-        kernel_size = [5, 5],
-        padding = "same", 
-        activation= tf.nn.relu,
-        name = "Deconv_3")
-    
-    deconv3_bn = tf.layers.batch_normalization(deconv3,
-                                             name = "deconv_3_bn",
-                                             center=True, 
-                                             scale=True, 
-                                             training=(mode == tf.estimator.ModeKeys.TRAIN))
-    
-    # final covolution to get to 3 layers
-    conv4 = tf.layers.conv2d(
-        inputs = deconv3_bn,
+    # final 
+    final_layer = tf.layers.conv2d(
+        inputs = conv19,
         filters = 1,
         kernel_size = [1, 1],
         padding = "same",
-        activation = tf.nn.relu,
-        name = "Conv_4") + input_layer
-
+        activation = None,
+        name = "final_layer") + input_layer
+    
     
     if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode = mode, predictions=conv4)
+        return tf.estimator.EstimatorSpec(mode = mode, predictions=final_layer)
     
     # Calculate Loss (for both Train and EVAL modes)
-    loss = tf.losses.absolute_difference(labels = labels , predictions = conv4)
+    # See that the residual learning is implemented here.
+    loss = tf.losses.mean_squared_error(labels = labels , predictions = final_layer)
     tf.summary.scalar("Value_Loss_Function", loss)
-
+        
+    # Configure the Training OP (for TRAIN mode)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        # calculate current learning rate:
+        alpha = tf.train.get_global_step() / tau
+        cur_learning_rate = tf.math.maximum(tf.constant(0.0, dtype ='float64'),(1-alpha)) * eps_start + tf.math.minimum(tf.constant(1.0, dtype ='float64') , alpha) * eps_end
+        tf.summary.scalar("Learning_rate", cur_learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate = cur_learning_rate)
+        train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
+        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+        
+        
+    # Output all learnable variables for tensorboard
     for var in tf.trainable_variables():
         name = var.name
         name = name.replace(':', '_')
         tf.summary.histogram(name, var)
     merged_summary = tf.summary.merge_all()
-        
-    # Configure the Training OP (for TRAIN mode)
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate = 0.001)
-        train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
-        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-        
+    
     # Add evaluation metrics
     eval_metric_ops = {
-        "accuracy": tf.metrics.mean_absolute_error(
-            labels=labels, predictions=conv4)}
+        "accuracy": tf.metrics.mean_squared_error(
+            labels=labels, predictions=final_layer)}
     return tf.estimator.EstimatorSpec(
           mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)    
+
 
 # rename test and train
 train_data = X_train
@@ -190,11 +156,11 @@ ImpNet = tf.estimator.Estimator(config=runconf,
 train_input_fn = tf.estimator.inputs.numpy_input_fn(
     x={"x": X_train},
     y=Y_train,
-    batch_size=32,
-    num_epochs=10,
+    batch_size=12,
+    num_epochs=None,
     shuffle=True)
 
 # run model
 ImpNet.train(
     input_fn=train_input_fn,
-    steps=10)
+    steps=100000)
