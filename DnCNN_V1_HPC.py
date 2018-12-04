@@ -119,12 +119,11 @@ def cnn_model_fn(features, labels, mode):
     if mode == tf.estimator.ModeKeys.TRAIN:
         # calculate current learning rate:
         alpha = tf.train.get_global_step() / tau
-        cur_learning_rate = tf.math.maximum(tf.constant(0.0, dtype ='float64'),(1-alpha)) * eps_start + tf.math.minimum(tf.constant(1.0, dtype ='float64') , alpha) * eps_end
+        cur_learning_rate = tf.maximum(tf.constant(0.0, dtype ='float64'),(1-alpha)) * eps_start + tf.minimum(tf.constant(1.0, dtype ='float64') , alpha) * eps_end
         tf.summary.scalar("Learning_rate", cur_learning_rate)
         optimizer = tf.train.AdamOptimizer(learning_rate = cur_learning_rate)
         train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
         return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-        
         
     # Output all learnable variables for tensorboard
     for var in tf.trainable_variables():
@@ -147,7 +146,7 @@ train_labels = Y_train
 eval_data = X_eval
 eval_labels = Y_eval
 
-runconf = tf.estimator.RunConfig(save_summary_steps=5, log_step_count_steps = 10)
+runconf = tf.estimator.RunConfig(save_summary_steps=20, log_step_count_steps = 20)
 save_dir = "/scratch2/ttoebro/models/" + str(datetime.datetime.now())[0:19].replace("-", "_").replace(" ", "_").replace(":", "_").replace(".", "_")
 
 ImpNet = tf.estimator.Estimator(config=runconf,
