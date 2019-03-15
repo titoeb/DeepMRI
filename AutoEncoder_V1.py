@@ -145,13 +145,13 @@ def AutoEncoder_model(features, labels, mode):
         return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
 runconf = tf.estimator.RunConfig(save_summary_steps=100, log_step_count_steps = 1000)
-save_dir = "/scratch2/ttoebro/models/AutoEncoder_" + str(datetime.datetime.now())[0:19].replace("-", "_").replace(" ", "_").replace(":", "_").replace(".", "_")
+save_dir = "/scratch2/ttoebro/models/AutoEncoder_V1/"
 AutoEncoder = tf.estimator.Estimator(config=runconf,
     model_fn=AutoEncoder_model, model_dir=save_dir)
 train = tf.estimator.inputs.numpy_input_fn(
     x={"x": X_train},
     y=Y_train,
-    batch_size=12,
+    batch_size=8,
     num_epochs=None,
     shuffle=True)
 AutoEncoder.train(

@@ -1,33 +1,23 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# Loading some packages
-
-# In[2]:
-
-
+# Load packages
 import numpy as np
-import pandas as pd
-import tensorflow as tf
-import gc
+# import pandas as pd
 import datetime
+import os
+import tensorflow as tf
+from tensorflow.python.ops.image_ops_impl import _fspecial_gauss
+from tensorflow.python.framework import constant_op
+from tensorflow.python.framework import dtypes
 
+# Import Data
+# Import X
+X_train = np.load('/scratch2/truhkop/knee1/data/X_train.npy')
 
-# Load data
+#Import Y
+Y_train = np.load('/scratch2/truhkop/knee1/data/Y_train.npy')
 
-# In[3]:
-
-
-X = np.load('/scratch2/ttoebro/data/X_train_rad41.npy')
-Y = np.load('/scratch2/ttoebro/data/Y_train_rad41.npy')
-
-
-# Helper functions for the network
-
-# In[4]:
-
-
+lossflavour = ['MAE', 'MSE', 'SSIM', 'MS-SSIM', 'MS-SSIM-GL1'][1]
 def conv_2(tensor_in, name_layer, n_filter, mode, is_start = False):
+
         
     x = tf.layers.conv2d(
         inputs = tensor_in,
@@ -117,16 +107,11 @@ def level_up(tensor_in, insert_layer, name_layer, n_filter, mode):
     
     return x
 
-
-# Definition of the NN
-
-# In[5]:
-
-
+# Definition of the NN #
 def AutoEncoder_model(features, labels, mode):
-    
+
     # Input Tensor
-    input_tensor = features['x']
+    input_tensor = features
     
     # Level 0
     level_0 = conv_2(input_tensor, "level_0", n_filter = 64, mode = mode, is_start = True)
@@ -181,63 +166,129 @@ def AutoEncoder_model(features, labels, mode):
         padding = "same",
         activation = None,
         name = "final_layer")
-        
-    # Give output in prediction mode
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode = mode, predictions=final_layer)
-    
-    
+
     
     if not (mode == tf.estimator.ModeKeys.PREDICT):
         # Output all learnable variables for tensorboard
         for var in tf.trainable_variables():
             name = var.name
             name = name.replace(':', '_')
-        tf.summary.image("Input_Image", input_tensor, max_outputs = 1)
-        tf.summary.image("Output_Image", final_layer, max_outputs = 1)
-        tf.summary.image("True_Image", labels,  max_outputs = 1)
-        tf.summary.histogram("Summary_final_layer", final_layer)
-        tf.summary.histogram("Summary_labels", labels)
+            tf.summary.histogram(name, var)
+        merged_summary = tf.summary.merge_all()
+
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            tf.summary.image("Input_Image", input_tensor, max_outputs = 1)
+            tf.summary.image("Output_Image", final_layer, max_outputs = 1)
+            tf.summary.image("True_Image", labels,  max_outputs = 1)
+            tf.summary.histogram("Summary_final_layer", final_layer)
+            tf.summary.histogram("Summary_labels", labels)
         
+    # Give output in prediction mode
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode = mode, predictions=final_layer)
+    
+
+
+    # (losses) -----------------------------------------------------------------
     # Calculate Loss (for both Train and EVAL modes)
-    # See that the residual learning is implemented here.
-    loss = tf.losses.absolute_difference(labels = labels , predictions = final_layer)
+    def l1 (prediction, labels):
+        return tf.losses.absolute_difference(
+            labels=labels,
+            predictions=prediction)
+
+    def mse (prediction, labels):
+        return tf.losses.mean_squared_error(
+            labels=labels,
+            predictions=prediction)
+
+
+    def ssim (prediction, labels):
+        # ssim returns a tensor containing ssim value for each image in batch: reduce!
+        return 1 - tf.reduce_mean(
+            tf.image.ssim(
+                prediction,
+                labels,
+                max_val=1))
+
+    def ssim_multiscale(prediction, label):
+        return 1- tf.reduce_mean(
+            tf.image.ssim_multiscale(
+                    img1=label,
+                    img2=prediction,
+                    max_val=1)
+            )
+
+    def loss_ssim_multiscale_gl1 (prediction, label, alpha=0.84):
+        ''' Loss function, calculating alpha * Loss_msssim + (1-alpha) gaussiankernel * L1_loss
+        according to 'Loss Functions for Image Restoration with Neural Networks' [Zhao]
+        :alpha: default value accoording to paper'''
+
+        # stride according to MS-SSIM source
+        kernel_on_l1 = tf.nn.conv2d(
+            input=tf.subtract(label, prediction),
+            filter=gaussiankernel,
+            strides=[1, 1, 1, 1],
+            padding='VALID')
+
+        # total no. of pixels: number of patches * number of pixels per patch
+        img_patch_norm = tf.to_float(kernel_on_l1.shape[1] * filter_size ** 2)
+        gl1 = tf.reduce_sum(kernel_on_l1) / img_patch_norm
+
+        # ssim_multiscale already calculates the dyalidic pyramid (with as replacment avg.pooling)
+        msssim = tf.reduce_sum(
+            tf.image.ssim_multiscale(
+                img1=label,
+                img2=prediction,
+                max_val=1)
+        )
+        return alpha * (1 - msssim) + (1 - alpha) * gl1
+
+        # Discrete Gaussian Kernel (required only in MS-SSIM-GL1 case)
+        # not in MS-SSIM-GL1 function, as it is executed only once
+        # values according to MS-SSIM source code
+
+    filter_size = constant_op.constant(11, dtype=dtypes.int32)
+    filter_sigma = constant_op.constant(1.5, dtype=features.dtype)
+    gaussiankernel = _fspecial_gauss(
+        size=filter_size,
+        sigma=filter_sigma
+    )
+
+    # for TRAIN & EVAL
+    loss = {
+        'MAE': l1,
+        'MSE': mse,
+        'SSIM': ssim,
+        'MS-SSIM':ssim_multiscale,
+        'MS-SSIM-GL1': loss_ssim_multiscale_gl1
+    }[lossflavour](final_layer, labels)
+
     tf.summary.scalar("Value_Loss_Function", loss)
-    merged_summary = tf.summary.merge_all()
+        
     # Configure Learning when training.
     if mode == tf.estimator.ModeKeys.TRAIN:
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.025)
+            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.005)
             optimizer = tf.contrib.estimator.clip_gradients_by_norm(original_optimizer, clip_norm=5.0)
             train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
 
-# Running Specification
 
-# In[6]:
-
-
-runconf = tf.estimator.RunConfig(save_summary_steps=500, log_step_count_steps = 100)
-
-AutoEncoder = tf.estimator.Estimator(config=runconf,
-    model_fn=AutoEncoder_model, model_dir= "/scratch2/ttoebro/models/AutoEncoder_V5_2")
-
+AutoEncoder = tf.estimator.Estimator(
+    config= tf.estimator.RunConfig(save_summary_steps=2, log_step_count_steps = 10),
+    model_fn=AutoEncoder_model,
+    model_dir="/scratch2/truhkop/model/AutoEncoder_{}".format(lossflavour))
 
 train = tf.estimator.inputs.numpy_input_fn(
-    x={"x": X},
-    y=Y,
-    batch_size=8,
+    x=X_train,
+    y=Y_train,
+    batch_size=2,
     num_epochs=None,
     shuffle=True)
 
-
-# Let it run!
-
-# In[ ]:
-
-
 AutoEncoder.train(
     input_fn=train,
-    steps=1000000)
+    steps=100)
+

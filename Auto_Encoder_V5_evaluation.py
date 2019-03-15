@@ -3,28 +3,22 @@
 
 # Loading some packages
 
-# In[2]:
+# In[1]:
 
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import gc
 import datetime
-
-
-# Load data
-
-# In[3]:
-
-
-X = np.load('/scratch2/ttoebro/data/X_train_rad41.npy')
-Y = np.load('/scratch2/ttoebro/data/Y_train_rad41.npy')
+from PIL import Image
+from SSIM_PIL import compare_ssim
 
 
 # Helper functions for the network
 
-# In[4]:
+# In[2]:
 
 
 def conv_2(tensor_in, name_layer, n_filter, mode, is_start = False):
@@ -120,7 +114,7 @@ def level_up(tensor_in, insert_layer, name_layer, n_filter, mode):
 
 # Definition of the NN
 
-# In[5]:
+# In[3]:
 
 
 def AutoEncoder_model(features, labels, mode):
@@ -201,14 +195,14 @@ def AutoEncoder_model(features, labels, mode):
         
     # Calculate Loss (for both Train and EVAL modes)
     # See that the residual learning is implemented here.
-    loss = tf.losses.absolute_difference(labels = labels , predictions = final_layer)
+    loss = tf.losses.mean_squared_error(labels = labels , predictions = final_layer)
     tf.summary.scalar("Value_Loss_Function", loss)
     merged_summary = tf.summary.merge_all()
     # Configure Learning when training.
     if mode == tf.estimator.ModeKeys.TRAIN:
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.025)
+            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.05)
             optimizer = tf.contrib.estimator.clip_gradients_by_norm(original_optimizer, clip_norm=5.0)
             train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
@@ -216,28 +210,187 @@ def AutoEncoder_model(features, labels, mode):
 
 # Running Specification
 
+# In[4]:
+
+
+runconf = tf.estimator.RunConfig(save_summary_steps=5, log_step_count_steps = 10)
+
+AutoEncoder = tf.estimator.Estimator(config=runconf,
+    model_fn=AutoEncoder_model, model_dir= "/scratch2/ttoebro/models/DnCNN_V5_V2")
+
+
+# Evalutation
+
+# Evaluate on rad_41
+
+# Load Data
+
+# In[5]:
+
+
+X = np.load('/scratch2/ttoebro/data/X_test_rad41.npy')
+Y = np.load('/scratch2/ttoebro/data/Y_test_rad41.npy')
+
+
 # In[6]:
 
 
-runconf = tf.estimator.RunConfig(save_summary_steps=500, log_step_count_steps = 100)
-
-AutoEncoder = tf.estimator.Estimator(config=runconf,
-    model_fn=AutoEncoder_model, model_dir= "/scratch2/ttoebro/models/AutoEncoder_V5_2")
-
-
-train = tf.estimator.inputs.numpy_input_fn(
-    x={"x": X},
-    y=Y,
-    batch_size=8,
-    num_epochs=None,
-    shuffle=True)
+# Evaluate the model and print results
+predict_input_fn = tf.estimator.inputs.numpy_input_fn(
+    x={"x": X[:,:,:,:]},
+    y=Y[:,:,:,:],
+    batch_size = 1,
+    shuffle=False)
+predict_results = AutoEncoder.predict(input_fn=predict_input_fn)
 
 
-# Let it run!
+# In[7]:
+
+
+sum_mae_rad41 = 0
+sum_mse_rad41 = 0
+sum_ssim_rad41 = 0
+
+
+# In[8]:
+
+
+for im_num in range(0, Y.shape[0]):
+    prediction = next(predict_results)
+    true_image = Y[im_num,:,:,:]
+    sum_mae_rad41 += np.mean(np.abs(prediction - true_image))
+    sum_mse_rad41 += np.mean(np.power((prediction - true_image), 2))
+    sum_ssim_rad41 += compare_ssim(Image.fromarray((prediction[:,:,0] * 255).astype('uint8'), 'L'),
+             Image.fromarray((true_image[:,:,0] * 255).astype('uint8'), 'L'))
+    if(im_num % 1000 == 0):
+        print("Current mae is " + str(sum_mae_rad41) + " and mse is " + str(sum_mse_rad41) + " and ssim is " + str(sum_ssim_rad41) + " at picture " + str(im_num))
+
 
 # In[ ]:
 
 
-AutoEncoder.train(
-    input_fn=train,
-    steps=1000000)
+sum_mae_rad41 /= X.shape[0]
+sum_mse_rad41 /= X.shape[0]
+sum_ssim_rad41 /= X.shape[0]
+
+
+# Evaluate on rad_15
+
+# In[ ]:
+
+
+X = np.load('/scratch2/ttoebro/data/X_test_rad_15.npy')
+Y = np.load('/scratch2/ttoebro/data/Y_test_rad_15.npy')
+
+
+# In[ ]:
+
+
+# Evaluate the model and print results
+predict_input_fn = tf.estimator.inputs.numpy_input_fn(
+    x={"x": X[:,:,:,:]},
+    y=Y[:,:,:,:],
+    batch_size = 1,
+    shuffle=False)
+predict_results = AutoEncoder.predict(input_fn=predict_input_fn)
+
+
+# In[ ]:
+
+
+sum_mae_rad15 = 0
+sum_mse_rad15 = 0
+sum_ssim_rad15 = 0
+
+
+# In[ ]:
+
+
+for im_num in range(0, Y.shape[0]):
+    prediction = next(predict_results)
+    true_image = Y[im_num,:,:,:]
+    sum_mae_rad15 += np.mean(np.abs(prediction - true_image))
+    sum_mse_rad15 += np.mean(np.power((prediction - true_image), 2))
+    sum_ssim_rad15 += compare_ssim(Image.fromarray((prediction[:,:,0] * 255).astype('uint8'), 'L'),
+             Image.fromarray((true_image[:,:,0] * 255).astype('uint8'), 'L'))
+    if(im_num % 1000 == 0):
+        print("Current mae is " + str(sum_mae_rad15) + " and mse is " + str(sum_mse_rad15) + " and ssim is " + str(sum_ssim_rad15) + " at picture " + str(im_num))
+
+
+# In[ ]:
+
+
+sum_mae_rad15 /= X.shape[0]
+sum_mse_rad15 /= X.shape[0]
+sum_ssim_rad15 /= X.shape[0]
+
+
+# Evaluate on Pois
+
+# In[ ]:
+
+
+X = np.load('/scratch2/ttoebro/data/X_test_pois_1_9.npy')
+Y = np.load('/scratch2/ttoebro/data/Y_test_pois_1_9.npy')
+
+
+# In[ ]:
+
+
+# Evaluate the model and print results
+predict_input_fn = tf.estimator.inputs.numpy_input_fn(
+    x={"x": X[:,:,:,:]},
+    y=Y[:,:,:,:],
+    batch_size = 1,
+    shuffle=False)
+predict_results = AutoEncoder.predict(input_fn=predict_input_fn)
+
+
+# In[ ]:
+
+
+sum_mae_pois_1_9 = 0
+sum_mse_pois_1_9 = 0
+sum_ssim_pois_1_9= 0
+
+
+# In[ ]:
+
+
+for im_num in range(0, Y.shape[0]):
+    prediction = next(predict_results)
+    true_image = Y[im_num,:,:,:]
+    sum_mae_pois_1_9 += np.mean(np.abs(prediction - true_image))
+    sum_mse_pois_1_9 += np.mean(np.power((prediction - true_image), 2))
+    sum_ssim_pois_1_9 += compare_ssim(Image.fromarray((prediction[:,:,0] * 255).astype('uint8'), 'L'),
+             Image.fromarray((true_image[:,:,0] * 255).astype('uint8'), 'L'))
+    if(im_num % 1000 == 0):
+        print("Current mae is " + str(sum_mae_pois_1_9) + " and mse is " + str(sum_mse_pois_1_9) + " and ssim is " + str(sum_ssim_pois_1_9) + " at picture " + str(im_num))
+
+
+# In[ ]:
+
+
+sum_mae_pois_1_9 /= X.shape[0]
+sum_mse_pois_1_9 /= X.shape[0]
+sum_ssim_pois_1_9 /= X.shape[0]
+
+
+# In[ ]:
+
+
+dic_data_frame = {'MAE' : [sum_mae_rad41, sum_mae_rad15, sum_mae_pois_1_9],
+                 'MSE' : [sum_mse_rad41, sum_mse_rad15, sum_mse_pois_1_9],
+                 'SSIM' : [sum_ssim_rad41, sum_ssim_rad15, sum_ssim_pois_1_9]}
+
+
+# In[21]:
+
+
+result = pd.DataFrame(dic_data_frame, index=['Rad_41', 'Rad_15', 'pois_1_9'])
+
+
+# In[23]:
+
+
+result.to_csv('/scratch2/ttoebro/results/DnCNN_V5_V2)

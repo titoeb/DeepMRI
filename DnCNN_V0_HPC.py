@@ -2,10 +2,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import tensorflow as tf
 import gc
 import datetime
 import os
+import tensorflow as tf
 
 # Import Data 
 
@@ -190,8 +190,8 @@ ImpNet = tf.estimator.Estimator(config=runconf,
 train_input_fn = tf.estimator.inputs.numpy_input_fn(
     x={"x": X_train},
     y=Y_train,
-    batch_size=64,
-    num_epochs=None,
+    batch_size=32,
+    num_epochs=10,
     shuffle=True)
 
 # run model

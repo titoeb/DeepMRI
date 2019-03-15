@@ -60,8 +60,8 @@ def cnn_model_fn(features, labels, mode):
     
     ## Hyper paramters ##
     eps_start = 0.05 #learning rate in the beginning
-    eps_end = eps_start / 100 #final learning rate
-    tau = 20000 # number of iterations afterwards is the learning rate constant
+    eps_end = 0.005 #final learning rate
+    tau = 10000 # number of iterations afterwards is the learning rate constant
     #####################
     
     # Input Layer
@@ -162,4 +162,4 @@ train_input_fn = tf.estimator.inputs.numpy_input_fn(
 # run model
 ImpNet.train(
     input_fn=train_input_fn,
-    steps=100000)
+    steps=20000)

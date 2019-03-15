@@ -1,31 +1,12 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# Loading some packages
-
-# In[2]:
-
-
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import gc
 import datetime
 
-
-# Load data
-
-# In[3]:
-
-
-X = np.load('/scratch2/ttoebro/data/X_train_rad41.npy')
-Y = np.load('/scratch2/ttoebro/data/Y_train_rad41.npy')
-
-
-# Helper functions for the network
-
-# In[4]:
-
+X = np.load('/scratch2/ttoebro/data/X_train_spulen_pois_sep.npy')
+Y = np.load('/scratch2/ttoebro/data/Y_train_spulen_pois_sep.npy')
 
 def conv_2(tensor_in, name_layer, n_filter, mode, is_start = False):
         
@@ -117,12 +98,6 @@ def level_up(tensor_in, insert_layer, name_layer, n_filter, mode):
     
     return x
 
-
-# Definition of the NN
-
-# In[5]:
-
-
 def AutoEncoder_model(features, labels, mode):
     
     # Input Tensor
@@ -176,7 +151,7 @@ def AutoEncoder_model(features, labels, mode):
     # final 
     final_layer = tf.layers.conv2d(
         inputs = level_0_up,
-        filters = 1,
+        filters = 16,
         kernel_size = [1, 1],
         padding = "same",
         activation = None,
@@ -193,9 +168,6 @@ def AutoEncoder_model(features, labels, mode):
         for var in tf.trainable_variables():
             name = var.name
             name = name.replace(':', '_')
-        tf.summary.image("Input_Image", input_tensor, max_outputs = 1)
-        tf.summary.image("Output_Image", final_layer, max_outputs = 1)
-        tf.summary.image("True_Image", labels,  max_outputs = 1)
         tf.summary.histogram("Summary_final_layer", final_layer)
         tf.summary.histogram("Summary_labels", labels)
         
@@ -208,7 +180,7 @@ def AutoEncoder_model(features, labels, mode):
     if mode == tf.estimator.ModeKeys.TRAIN:
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.025)
+            original_optimizer = tf.train.AdamOptimizer(learning_rate =  0.01)
             optimizer = tf.contrib.estimator.clip_gradients_by_norm(original_optimizer, clip_norm=5.0)
             train_op = optimizer.minimize(loss = loss, global_step=tf.train.get_global_step())
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
@@ -216,13 +188,13 @@ def AutoEncoder_model(features, labels, mode):
 
 # Running Specification
 
-# In[6]:
+# In[ ]:
 
 
-runconf = tf.estimator.RunConfig(save_summary_steps=500, log_step_count_steps = 100)
+runconf = tf.estimator.RunConfig(save_summary_steps=500, log_step_count_steps = 1000)
 
 AutoEncoder = tf.estimator.Estimator(config=runconf,
-    model_fn=AutoEncoder_model, model_dir= "/scratch2/ttoebro/models/AutoEncoder_V5_2")
+    model_fn=AutoEncoder_model, model_dir= "/scratch2/ttoebro/models/AutoEncoder_spulen_V1")
 
 
 train = tf.estimator.inputs.numpy_input_fn(
@@ -231,11 +203,6 @@ train = tf.estimator.inputs.numpy_input_fn(
     batch_size=8,
     num_epochs=None,
     shuffle=True)
-
-
-# Let it run!
-
-# In[ ]:
 
 
 AutoEncoder.train(
