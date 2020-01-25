@@ -165,7 +165,7 @@ for ((p_num=1; p_num <= $NDATASETS; p_num++))
    echo "Finished with Picture "$p_num 
    
    # delete the output file
-   rm ""$outputfilename".hdr"
-   rm ""$outputfilename".cfl"
+   #rm ""$outputfilename".hdr"
+   #rm ""$outputfilename".cfl"
 }
 rm tmp1* tmp2* 
